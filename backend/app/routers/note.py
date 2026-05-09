@@ -54,6 +54,10 @@ class VideoRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     top_p: Optional[float] = None
+    # 客户端（如浏览器插件）已经在用户浏览器里抓到字幕，直接传给后端复用，
+    # 跳过 download_subtitles 和音频转写。形如：
+    #   {"language": "zh", "full_text": "...", "segments": [{"start","end","text"}, ...]}
+    prefetched_transcript: Optional[dict] = None
 
     @field_validator("video_url")
     def validate_supported_url(cls, v):
@@ -76,6 +80,40 @@ def save_note_to_file(task_id: str, note):
     os.makedirs(NOTE_OUTPUT_DIR, exist_ok=True)
     with open(os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.json"), "w", encoding="utf-8") as f:
         json.dump(asdict(note), f, ensure_ascii=False, indent=2)
+
+
+def _persist_prefetched_transcript(task_id: str, transcript: dict) -> None:
+    """把客户端预取的字幕写到 NoteGenerator 期望的转写缓存文件里。
+
+    NoteGenerator.generate 会优先读 <task_id>_transcript.json，命中即跳过 download_subtitles
+    与音频转写流程。要求字段：language(可空)/full_text/segments[{start,end,text}]
+    """
+    segments = transcript.get("segments") or []
+    cleaned_segments = []
+    for s in segments:
+        text = (s.get("text") or "").strip()
+        if not text:
+            continue
+        cleaned_segments.append({
+            "start": float(s.get("start", 0)),
+            "end": float(s.get("end", 0)),
+            "text": text,
+        })
+    if not cleaned_segments:
+        raise ValueError("prefetched_transcript 没有可用的 segments")
+
+    full_text = transcript.get("full_text") or " ".join(s["text"] for s in cleaned_segments)
+    payload = {
+        "language": transcript.get("language") or "zh",
+        "full_text": full_text,
+        "segments": cleaned_segments,
+    }
+
+    os.makedirs(NOTE_OUTPUT_DIR, exist_ok=True)
+    target = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}_transcript.json")
+    with open(target, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    logger.info(f"已写入客户端预取字幕缓存: {target} ({len(cleaned_segments)} 段)")
 
 
 def run_note_task(task_id: str, video_url: str, platform: str, quality: DownloadQuality,
@@ -171,6 +209,13 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
         # 统一先写入 PENDING，表示已进入队列等待串行执行
         NoteGenerator()._update_status(task_id, TaskStatus.PENDING)
 
+        # 客户端已经抓好字幕的话，写到转写缓存文件，NoteGenerator 的 cache-hit 逻辑会直接用上
+        if data.prefetched_transcript:
+            try:
+                _persist_prefetched_transcript(task_id, data.prefetched_transcript)
+            except Exception as e:
+                logger.warning(f"写入预取字幕失败 (task_id={task_id}): {e}")
+
         background_tasks.add_task(run_note_task, task_id, data.video_url, data.platform, data.quality, data.link,
                                   data.screenshot, data.model_name, data.provider_id, data.format, data.style,
                                   data.extras, data.video_understanding, data.video_interval, data.grid_size,
@@ -204,64 +249,3 @@ def get_task_status(task_id: str):
                     "message": message,
                     "task_id": task_id
                 })
-            else:
-                # 理论上不会出现，保险处理
-                return R.success({
-                    "status": TaskStatus.PENDING.value,
-                    "message": "任务完成，但结果文件未找到",
-                    "task_id": task_id
-                })
-
-        if status == TaskStatus.FAILED.value:
-            return R.error(message or "任务失败", code=500)
-
-        # 处理中状态
-        return R.success({
-            "status": status,
-            "message": message,
-            "task_id": task_id
-        })
-
-    # 没有状态文件，但有结果
-    if os.path.exists(result_path):
-        with open(result_path, "r", encoding="utf-8") as f:
-            result_content = json.load(f)
-        return R.success({
-            "status": TaskStatus.SUCCESS.value,
-            "result": result_content,
-            "task_id": task_id
-        })
-
-    # 什么都没有，默认PENDING
-    return R.success({
-        "status": TaskStatus.PENDING.value,
-        "message": "任务排队中",
-        "task_id": task_id
-    })
-
-
-@router.get("/image_proxy")
-async def image_proxy(request: Request, url: str):
-    headers = {
-        "Referer": "https://www.bilibili.com/",
-        "User-Agent": request.headers.get("User-Agent", ""),
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
-
-            if resp.status_code != 200:
-                raise HTTPException(status_code=resp.status_code, detail="图片获取失败")
-
-            content_type = resp.headers.get("Content-Type", "image/jpeg")
-            return StreamingResponse(
-                resp.aiter_bytes(),
-                media_type=content_type,
-                headers={
-                    "Cache-Control": "public, max-age=86400",  #  缓存一天
-                    "Content-Type": content_type,
-                }
-            )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

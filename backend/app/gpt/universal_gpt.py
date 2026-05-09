@@ -58,11 +58,13 @@ class UniversalGPT(GPT):
             extras=kwargs.get('extras'),
         )
 
-        # ⛳ 组装 content 数组，支持 text + image_url 混合
-        content: List[dict] = [{"type": "text", "text": content_text}]
         video_img_urls = kwargs.get('video_img_urls', [])
 
-        if self.vision_supported:
+
+        content: list[dict] | str
+        if video_img_urls and self.vision_supported:
+            # 有截图且模型支持视觉时走多模态 content 数组（text + image_url）
+            content = [{"type": "text", "text": content_text}]
             for url in video_img_urls:
                 content.append({
                     "type": "image_url",
@@ -71,8 +73,12 @@ class UniversalGPT(GPT):
                         "detail": "auto"
                     }
                 })
+        else:
+            # 纯文本场景退回 string content：DeepSeek deepseek-chat 等非多模态模型
+            # 不识别 [{"type":"text",...}] 数组形态，会返回 invalid_request_error
+            # （issue #282）。OpenAI 规范本身也允许 content 为 string。
+            content = content_text
 
-        #  正确格式：整体包在一个 message 里，role + content array
         messages = []
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
@@ -92,9 +98,10 @@ class UniversalGPT(GPT):
 
     def _build_merge_messages(self, partials: list) -> list:
         merge_text = MERGE_PROMPT + "\n\n" + "\n\n---\n\n".join(partials)
+        # 合并阶段没有图片，直接用 string content 兼容非多模态模型（issue #282）
         return [{
             "role": "user",
-            "content": [{"type": "text", "text": merge_text}]
+            "content": merge_text
         }]
 
     def _checkpoint_path(self, checkpoint_key: str) -> Path:
