@@ -18,6 +18,14 @@ def extract_video_id(url: str, platform: str) -> Optional[str]:
             if resolved_url:
                 url = resolved_url
 
+        # 匹配 cheese 课程链接 (ep/ss)
+        cheese_match = re.search(r"/cheese/play/ep(\d+)", url)
+        if cheese_match:
+            return f"ep{cheese_match.group(1)}"
+        cheese_ss = re.search(r"/cheese/play/ss(\d+)", url)
+        if cheese_ss:
+            return f"ss{cheese_ss.group(1)}"
+
         # 匹配 BV号（如 BV1vc411b7Wa）
         match = re.search(r"BV([0-9A-Za-z]+)", url)
         return f"BV{match.group(1)}" if match else None

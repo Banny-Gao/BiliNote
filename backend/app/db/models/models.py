@@ -9,4 +9,5 @@ class Model(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     provider_id = Column(Integer, nullable=False)
     model_name = Column(String, nullable=False)
+    vision_supported = Column(Integer, default=1)
     created_at = Column(DateTime, server_default=func.now())

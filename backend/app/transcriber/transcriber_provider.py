@@ -6,6 +6,7 @@ from app.transcriber.groq import GroqTranscriber
 from app.transcriber.whisper import WhisperTranscriber
 from app.transcriber.bcut import BcutTranscriber
 from app.transcriber.kuaishou import KuaishouTranscriber
+from app.transcriber.volcengine import VolcengineTranscriber
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -16,6 +17,7 @@ class TranscriberType(str, Enum):
     BCUT = "bcut"
     KUAISHOU = "kuaishou"
     GROQ = "groq"
+    VOLCENGINE = "volcengine"
 
 # 在 Apple 平台尝试导入 MLX Whisper（不再依赖环境变量，支持前端动态切换）
 MLX_WHISPER_AVAILABLE = False
@@ -36,6 +38,7 @@ _transcribers = {
     TranscriberType.BCUT: None,
     TranscriberType.KUAISHOU: None,
     TranscriberType.GROQ: None,
+    TranscriberType.VOLCENGINE: None,
 }
 
 # 公共实例初始化函数
@@ -54,8 +57,12 @@ def _init_transcriber(key: TranscriberType, cls, *args, **kwargs):
 def get_groq_transcriber():
     return _init_transcriber(TranscriberType.GROQ, GroqTranscriber)
 
+def get_volcengine_transcriber():
+    return _init_transcriber(TranscriberType.VOLCENGINE, VolcengineTranscriber)
+
 def get_whisper_transcriber(model_size="base", device="cuda"):
-    return _init_transcriber(TranscriberType.FAST_WHISPER, WhisperTranscriber, model_size=model_size, device=device)
+    cpu_threads = int(os.environ.get("WHISPER_CPU_THREADS", "4"))
+    return _init_transcriber(TranscriberType.FAST_WHISPER, WhisperTranscriber, model_size=model_size, device=device, cpu_threads=cpu_threads)
 
 def get_bcut_transcriber():
     return _init_transcriber(TranscriberType.BCUT, BcutTranscriber)
@@ -111,6 +118,9 @@ def get_transcriber(transcriber_type="fast-whisper", model_size="base", device="
 
     elif transcriber_enum == TranscriberType.GROQ:
         return get_groq_transcriber()
+
+    elif transcriber_enum == TranscriberType.VOLCENGINE:
+        return get_volcengine_transcriber()
 
     # fallback
     logger.warning(f'未识别转录器类型 "{transcriber_type}"，使用 fast-whisper 作为默认')

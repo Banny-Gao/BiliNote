@@ -21,6 +21,7 @@ interface IModelListItem {
   id: string
   provider_id: string
   model_name: string
+  vision_supported: boolean
   created_at?: string
 }
 

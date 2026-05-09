@@ -17,10 +17,15 @@ from typing import List
 
 
 class UniversalGPT(GPT):
-    def __init__(self, client, model: str, temperature: float = 0.7):
+    def __init__(self, client, model: str, temperature: float = 0.7, vision_supported: bool = True,
+                 system_prompt: str = None, max_tokens: int = None, top_p: float = None):
         self.client = client
         self.model = model
         self.temperature = temperature
+        self.vision_supported = vision_supported
+        self.system_prompt = system_prompt
+        self.max_tokens = max_tokens
+        self.top_p = top_p
         self.screenshot = False
         self.link = False
         self.max_request_bytes = int(os.getenv("OPENAI_MAX_REQUEST_BYTES", str(45 * 1024 * 1024)))
@@ -57,20 +62,24 @@ class UniversalGPT(GPT):
         content: List[dict] = [{"type": "text", "text": content_text}]
         video_img_urls = kwargs.get('video_img_urls', [])
 
-        for url in video_img_urls:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": url,
-                    "detail": "auto"
-                }
-            })
+        if self.vision_supported:
+            for url in video_img_urls:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": url,
+                        "detail": "auto"
+                    }
+                })
 
         #  正确格式：整体包在一个 message 里，role + content array
-        messages = [{
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({
             "role": "user",
             "content": content
-        }]
+        })
 
         return messages
 
@@ -95,13 +104,16 @@ class UniversalGPT(GPT):
     def _build_source_signature(self, source: GPTSource) -> str:
         payload = {
             "model": self.model,
-            "temperature": self.temperature,
+            "temperature": source.temperature if source.temperature is not None else self.temperature,
             "max_request_bytes": self.max_request_bytes,
             "title": source.title,
             "tags": source.tags,
             "format": source._format,
             "style": source.style,
+            "system_prompt": source.system_prompt,
             "extras": source.extras,
+            "max_tokens": source.max_tokens,
+            "top_p": source.top_p,
             "video_img_urls": source.video_img_urls or [],
             "segments": [
                 {
@@ -180,13 +192,18 @@ class UniversalGPT(GPT):
 
     def _chat_completion_create(self, messages: list):
         last_exc = None
+        kwargs = dict(
+            model=self.model,
+            messages=messages,
+            temperature=self.temperature,
+        )
+        if self.max_tokens is not None:
+            kwargs["max_tokens"] = self.max_tokens
+        if self.top_p is not None:
+            kwargs["top_p"] = self.top_p
         for attempt in range(self._max_retry_attempts):
             try:
-                return self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=self.temperature
-                )
+                return self.client.chat.completions.create(**kwargs)
             except Exception as exc:
                 last_exc = exc
                 if attempt == self._max_retry_attempts - 1 or not self._is_retryable_error(exc):
@@ -237,6 +254,15 @@ class UniversalGPT(GPT):
     def summarize(self, source: GPTSource) -> str:
         self.screenshot = source.screenshot
         self.link = source.link
+        # 支持从 source 覆盖实例参数
+        if source.system_prompt is not None:
+            self.system_prompt = source.system_prompt
+        if source.temperature is not None:
+            self.temperature = source.temperature
+        if source.max_tokens is not None:
+            self.max_tokens = source.max_tokens
+        if source.top_p is not None:
+            self.top_p = source.top_p
         source.segment = self.ensure_segments_type(source.segment)
         checkpoint_key = source.checkpoint_key
         source_signature = self._build_source_signature(source) if checkpoint_key else None

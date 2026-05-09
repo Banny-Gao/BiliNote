@@ -71,6 +71,7 @@ class ModelService:
                 "id": model.get("id"),
                 "provider_id": model.get("provider_id"),
                 "model_name": model.get("model_name"),
+                "vision_supported": model.get("vision_supported", True),
                 "created_at": model.get("created_at", None),  # 如果有created_at字段
             })
         return formatted
@@ -129,7 +130,7 @@ class ModelService:
             print(f"[{model_id}] <UNK>: {e}")
             return False
     @staticmethod
-    def add_new_model(provider_id: int, model_name: str) -> bool:
+    def add_new_model(provider_id: int, model_name: str, vision_supported: bool = True) -> bool:
         try:
             # 先查供应商是否存在
             provider = ProviderService.get_provider_by_id(provider_id)
@@ -144,7 +145,7 @@ class ModelService:
                 return False
 
             # 插入模型
-            insert_model(provider_id=provider_id, model_name=model_name)
+            insert_model(provider_id=provider_id, model_name=model_name, vision_supported=vision_supported)
             print(f"模型 {model_name} 已成功添加到供应商ID {provider_id}")
             return True
         except Exception as e:

@@ -47,6 +47,14 @@
     "api_key": "",
     "base_url": "https://api.groq.com/openai/v1"
   },
+  {
+    "id": "volcengine",
+    "name": "豆包语音",
+    "type": "built-in",
+    "logo": "Volcengine",
+    "api_key": "",
+    "base_url": "https://openspeech.bytedance.com"
+  },
       {
     "id": "ollama",
     "name": "ollama",

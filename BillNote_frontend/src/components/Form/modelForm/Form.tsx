@@ -8,7 +8,6 @@ import {
   FormLabel,
   FormControl,
   FormMessage,
-  FormDescription,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -16,17 +15,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useProviderStore } from '@/store/providerStore'
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { testConnection, fetchModels, deleteModelById } from '@/services/model.ts'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select.tsx' // ⚡新增 fetchModels
+import { testConnection, deleteModelById } from '@/services/model.ts'
 import { ModelSelector } from '@/components/Form/modelForm/ModelSelector.tsx'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert.tsx'
-import { Tags } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { X } from 'lucide-react'
 import { useModelStore } from '@/store/modelStore'
 
@@ -41,11 +32,7 @@ const ProviderSchema = z.object({
 type ProviderFormValues = z.infer<typeof ProviderSchema>
 
 // ✅ Model表单schema
-const ModelSchema = z.object({
-  modelName: z.string().min(1, '请选择或填写模型名称'),
-})
 
-type ModelFormValues = z.infer<typeof ModelSchema>
 interface IModel {
   id: string
   created: number
@@ -59,10 +46,10 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
   const navigate = useNavigate()
   const isEditMode = !isCreate
 
-  const getProviderById = useProviderStore(state => state.getProviderById)
   const loadProviderById = useProviderStore(state => state.loadProviderById)
   const updateProvider = useProviderStore(state => state.updateProvider)
   const addNewProvider = useProviderStore(state => state.addNewProvider)
+  const removeProvider = useProviderStore(state => state.removeProvider)
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(false)
   const [isBuiltIn, setIsBuiltIn] = useState(false)
@@ -70,9 +57,6 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
   const [modelOptions, setModelOptions] = useState<IModel[]>([]) // ⚡新增，保存模型列表
   const [models, setModels]= useState([])
   const [modelLoading, setModelLoading] = useState(false)
-  const randomColor = ()=>{
-    return '#' + Math.floor(Math.random() * 16777215).toString(16)
-  }
 
   const [search, setSearch] = useState('')
   const providerForm = useForm<ProviderFormValues>({
@@ -84,18 +68,7 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       type: 'custom',
     },
   })
-  const filteredModelOptions = modelOptions.filter(model => {
-    const keywords = search.trim().toLowerCase().split(/\s+/) // 支持多个关键词
-    const target = model.id.toLowerCase()
-    return keywords.every(kw => target.includes(kw))
-  })
 
-  const modelForm = useForm<ModelFormValues>({
-    resolver: zodResolver(ModelSchema),
-    defaultValues: {
-      modelName: '',
-    },
-  })
 
   useEffect(() => {
 
@@ -166,28 +139,6 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
   }
 
   // 加载模型列表
-  const handleModelLoad = async () => {
-    const values = providerForm.getValues()
-    if (!values.apiKey || !values.baseUrl) {
-      toast.error('请先填写 API Key 和 Base URL')
-      return
-    }
-    try {
-      setModelLoading(true) // ✅ 开始 loading
-      const res = await fetchModels(id!, { noCache: true }) // 这里稍后解释
-      if (res.data.code === 0 && res.data.data.models.data.length > 0) {
-        setModelOptions(res.data.data.models.data)
-        console.log('🔧 模型列表:', res.data.data)
-        toast.success('模型列表加载成功 🎉')
-      } else {
-        toast.error('未获取到模型列表')
-      }
-    } catch (error) {
-      toast.error('加载模型列表失败')
-    } finally {
-      setModelLoading(false) // ✅ 结束 loading
-    }
-  }
 
   // 保存Provider信息
   const onProviderSubmit = async (values: ProviderFormValues) => {
@@ -195,19 +146,16 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       await updateProvider({ ...values, id: id! })
       toast.success('更新供应商成功')
     } else {
-       id = await addNewProvider({ ...values })
-
+      const newId = await addNewProvider({ ...values })
+      if (newId) {
+        navigate(`/settings/model/${newId}`, { replace: true })
+      }
       toast.success('新增供应商成功')
     }
-    // 刷新页面
 
   }
 
   // 保存Model信息
-  const onModelSubmit = async (values: ModelFormValues) => {
-    toast.success(`保存模型: ${values.modelName}`)
-    await loadModelsById(id!)
-  }
 
   if (loading) return <div className="p-4">加载中...</div>
 
@@ -282,10 +230,25 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
               </FormItem>
             )}
           />
-          <div className="pt-2">
+          <div className="flex items-center gap-2 pt-2">
             <Button type="submit" disabled={!providerForm.formState.isDirty}>
               {isEditMode ? '保存修改' : '保存创建'}
             </Button>
+            {isEditMode && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={async () => {
+                  if (window.confirm('确定要删除这个供应商吗？')) {
+                    await removeProvider(id!)
+                    navigate('/settings/model', { replace: true })
+                  }
+                }}
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                删除供应商
+              </Button>
+            )}
           </div>
         </form>
       </Form>

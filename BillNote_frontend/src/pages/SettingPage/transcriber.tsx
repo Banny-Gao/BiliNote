@@ -9,8 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AudioLines, AlertTriangle, CheckCircle2, Download, Loader2, Save, XCircle } from 'lucide-react'
+import { AudioLines, AlertTriangle, CheckCircle2, Download, Eye, EyeOff, KeyRound, Loader2, Save } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import {
   getTranscriberConfig,
@@ -24,15 +25,24 @@ import {
 const isWhisperType = (type: string) =>
   type === 'fast-whisper' || type === 'mlx-whisper'
 
+const CLOUD_TRANSCRIBER_IDS = ['groq', 'volcengine']
+
+const CLOUD_LABELS: Record<string, string> = {
+  groq: 'Groq',
+  volcengine: '火山引擎',
+}
+
 export default function Transcriber() {
   const [config, setConfig] = useState<TranscriberConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [selectedType, setSelectedType] = useState('')
   const [selectedModelSize, setSelectedModelSize] = useState('')
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({})
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([])
   const [mlxModelStatuses, setMlxModelStatuses] = useState<ModelStatus[]>([])
-  const [mlxAvailable, setMlxAvailable] = useState(false)
+  const [, setMlxAvailable] = useState(false)
 
   const fetchModelsStatus = useCallback(async () => {
     try {
@@ -52,6 +62,7 @@ export default function Transcriber() {
         setConfig(data)
         setSelectedType(data.transcriber_type)
         setSelectedModelSize(data.whisper_model_size)
+        setApiKeys(data.api_keys || {})
       } catch {
         toast.error('获取转写器配置失败')
       } finally {
@@ -75,11 +86,19 @@ export default function Transcriber() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const payload: { transcriber_type: string; whisper_model_size?: string } = {
+      const payload: {
+        transcriber_type: string
+        whisper_model_size?: string
+        api_keys?: Record<string, string>
+      } = {
         transcriber_type: selectedType,
       }
       if (isWhisperType(selectedType)) {
         payload.whisper_model_size = selectedModelSize
+      }
+      // Only send API keys for the currently selected cloud transcriber
+      if (CLOUD_TRANSCRIBER_IDS.includes(selectedType)) {
+        payload.api_keys = { [selectedType]: apiKeys[selectedType] || '' }
       }
       await updateTranscriberConfig(payload)
       toast.success('转写器配置已保存')
@@ -101,6 +120,10 @@ export default function Transcriber() {
     }
   }
 
+  const toggleShowKey = (id: string) => {
+    setShowKeys(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -114,6 +137,7 @@ export default function Transcriber() {
   }
 
   const currentModels = selectedType === 'mlx-whisper' ? mlxModelStatuses : modelStatuses
+  const isCloudType = CLOUD_TRANSCRIBER_IDS.includes(selectedType)
 
   return (
     <div className="space-y-6 p-6">
@@ -148,6 +172,38 @@ export default function Transcriber() {
               </SelectContent>
             </Select>
           </div>
+
+          {isCloudType && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                <KeyRound className="mr-1 inline-block h-3.5 w-3.5" />
+                {CLOUD_LABELS[selectedType] || selectedType} API Key
+              </label>
+              <div className="flex max-w-xs gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showKeys[selectedType] ? 'text' : 'password'}
+                    value={apiKeys[selectedType] || ''}
+                    onChange={e =>
+                      setApiKeys(prev => ({ ...prev, [selectedType]: e.target.value }))
+                    }
+                    placeholder={`输入${CLOUD_LABELS[selectedType] || selectedType} API Key`}
+                    className="w-full pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleShowKey(selectedType)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                  >
+                    {showKeys[selectedType] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-neutral-400">
+                在对应服务商控制台获取 API Key，保存后立即生效
+              </p>
+            </div>
+          )}
 
           {isWhisperType(selectedType) && (
             <div className="space-y-2">

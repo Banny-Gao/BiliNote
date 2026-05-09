@@ -45,6 +45,7 @@ def update_cookie(data: CookieUpdateRequest):
 class TranscriberConfigRequest(BaseModel):
     transcriber_type: str
     whisper_model_size: Optional[str] = None
+    api_keys: Optional[dict[str, str]] = None
 
 
 AVAILABLE_TRANSCRIBER_TYPES = [
@@ -52,6 +53,7 @@ AVAILABLE_TRANSCRIBER_TYPES = [
     {"value": "bcut", "label": "必剪（在线）"},
     {"value": "kuaishou", "label": "快手（在线）"},
     {"value": "groq", "label": "Groq（在线）"},
+    {"value": "volcengine", "label": "豆包语音（在线）"},
     {"value": "mlx-whisper", "label": "MLX Whisper（仅macOS）"},
 ]
 
@@ -76,6 +78,7 @@ def update_transcriber_config(data: TranscriberConfigRequest):
     config = transcriber_config_manager.update_config(
         transcriber_type=data.transcriber_type,
         whisper_model_size=data.whisper_model_size,
+        api_keys=data.api_keys,
     )
     return R.success(data=config)
 
@@ -217,16 +220,19 @@ async def sys_check():
 @router.get("/deploy_status")
 async def deploy_status():
     """返回部署监控所需的所有状态信息"""
-    import torch
     import os
-    
+
     # CUDA 状态
-    cuda_available = torch.cuda.is_available()
-    cuda_info = {
-        "available": cuda_available,
-        "version": torch.version.cuda if cuda_available else None,
-        "gpu_name": torch.cuda.get_device_name(0) if cuda_available else None,
-    }
+    try:
+        import torch
+        cuda_available = torch.cuda.is_available()
+        cuda_info = {
+            "available": cuda_available,
+            "version": torch.version.cuda if cuda_available else None,
+            "gpu_name": torch.cuda.get_device_name(0) if cuda_available else None,
+        }
+    except Exception:
+        cuda_info = {"available": False, "version": None, "gpu_name": None}
     
     # Whisper 模型状态（从配置文件读取，与前端设置同步）
     transcriber_cfg = transcriber_config_manager.get_config()
