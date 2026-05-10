@@ -329,3 +329,6 @@ ffmpeg*/
 ffmpg*/
 
 .playwright-mcp/
+
+# Visual Studio Build Tools installer
+vs_BuildTools.exe
