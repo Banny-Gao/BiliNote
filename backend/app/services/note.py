@@ -14,6 +14,7 @@ from app.downloaders.bilibili_downloader import BilibiliDownloader
 from app.downloaders.douyin_downloader import DouyinDownloader
 from app.downloaders.local_downloader import LocalDownloader
 from app.downloaders.youtube_downloader import YoutubeDownloader
+from app.db.model_dao import get_model_by_provider_and_name as get_model_dao_by_provider_and_name
 from app.db.video_task_dao import delete_task_by_video, insert_video_task
 from app.enmus.exception import NoteErrorEnum, ProviderErrorEnum
 from app.enmus.task_status_enums import TaskStatus
@@ -96,6 +97,10 @@ class NoteGenerator:
         video_understanding: bool = False,
         video_interval: int = 0,
         grid_size: Optional[List[int]] = None,
+        system_prompt: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
     ) -> NoteResult | None:
         """
         主流程：按步骤依次下载、转写、GPT 总结、截图/链接处理、存库、返回 NoteResult。
@@ -211,6 +216,10 @@ class NoteGenerator:
                 style=style,
                 extras=extras,
                 video_img_urls=self.video_img_urls,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
             )
 
             # 4. 截图 & 链接替换
@@ -276,12 +285,15 @@ class NoteGenerator:
             logger.error(f"[get_gpt] 未找到模型供应商: provider_id={provider_id}")
             raise ProviderError(code=ProviderErrorEnum.NOT_FOUND,message=ProviderErrorEnum.NOT_FOUND.message)
         logger.info(f"创建 GPT 实例 {provider_id}")
+        model_record = get_model_dao_by_provider_and_name(provider["id"], model_name) if model_name else None
+        vision_supported = model_record["vision_supported"] if model_record else True
         config = ModelConfig(
             api_key=provider["api_key"],
             base_url=provider["base_url"],
             model_name=model_name,
             provider=provider["type"],
             name=provider["name"],
+            vision_supported=vision_supported,
         )
         return GPTFactory().from_config(config)
 
@@ -577,20 +589,13 @@ class NoteGenerator:
         style: Optional[str],
         extras: Optional[str],
             video_img_urls: List[str],
+            system_prompt: Optional[str] = None,
+            temperature: Optional[float] = None,
+            max_tokens: Optional[int] = None,
+            top_p: Optional[float] = None,
     ) -> str | None:
         """
         调用 GPT 对转写结果进行总结，生成 Markdown 文本并缓存。
-
-        :param audio_meta: AudioDownloadResult 元信息
-        :param transcript: TranscriptResult 转写结果
-        :param gpt: GPT 实例
-        :param markdown_cache_file: Markdown 缓存路径
-        :param link: 是否在笔记中插入链接
-        :param screenshot: 是否在笔记中生成截图占位
-        :param formats: 包含 'link' 或 'screenshot' 的列表
-        :param style: GPT 输出风格
-        :param extras: GPT 额外参数
-        :return: 生成的 Markdown 字符串
         """
         task_id = markdown_cache_file.stem
         self._update_status(task_id, TaskStatus.SUMMARIZING)
@@ -606,6 +611,10 @@ class NoteGenerator:
             style=style,
             extras=extras,
             checkpoint_key=task_id,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
         )
 
         try:

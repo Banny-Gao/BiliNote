@@ -37,7 +37,7 @@ class WhisperTranscriber(Transcriber):
             model_size: str = "base",
             device: str = 'cpu',
             compute_type: str = None,
-            cpu_threads: int = 1,
+            cpu_threads: int = 4,
     ):
         if device == 'cpu' or device is None:
             self.device = 'cpu'

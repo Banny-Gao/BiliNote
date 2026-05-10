@@ -5,6 +5,7 @@ import {
   getProviderById,
   getProviderList,
   updateProviderById,
+  deleteProviderById,
 } from '@/services/model.ts'
 
 interface ProviderStore {
@@ -15,8 +16,9 @@ interface ProviderStore {
   getProviderList: () => IProvider[]
   fetchProviderList: () => Promise<void>
   loadProviderById: (id: string) => Promise<void>
-  addNewProvider: (provider: IProvider) => Promise<void>
+  addNewProvider: (provider: IProvider) => Promise<string | undefined>
   updateProvider: (provider: IProvider) => Promise<void>
+  removeProvider: (id: string) => Promise<void>
 }
 
 export const useProviderStore = create<ProviderStore>((set, get) => ({
@@ -59,16 +61,19 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
       base_url: provider.baseUrl,
     }
     try {
-      const res = await addProvider(payload)
-      if (res.data.code === 0) {
-        const item = res.data.data
-        console.log('Provider ', item)
-
-        await get().fetchProviderList()
-        return  item
-      }
+      const newId = await addProvider(payload)
+      await get().fetchProviderList()
+      return newId
     } catch (error) {
-      console.error('Error fetching provider:', error)
+      console.error('Error adding provider:', error)
+    }
+  },
+  removeProvider: async (id: string) => {
+    try {
+      await deleteProviderById(id)
+      await get().fetchProviderList()
+    } catch (error) {
+      console.error('Error deleting provider:', error)
     }
   },
   // 按 id 获取单个 provider

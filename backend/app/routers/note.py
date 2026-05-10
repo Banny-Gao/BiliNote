@@ -54,6 +54,10 @@ class VideoRequest(BaseModel):
     # 跳过 download_subtitles 和音频转写。形如：
     #   {"language": "zh", "full_text": "...", "segments": [{"start","end","text"}, ...]}
     prefetched_transcript: Optional[dict] = None
+    system_prompt: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
 
     @field_validator("video_url")
     def validate_supported_url(cls, v):
@@ -115,7 +119,7 @@ def _persist_prefetched_transcript(task_id: str, transcript: dict) -> None:
 def run_note_task(task_id: str, video_url: str, platform: str, quality: DownloadQuality,
                   link: bool = False, screenshot: bool = False, model_name: str = None, provider_id: str = None,
                   _format: list = None, style: str = None, extras: str = None, video_understanding: bool = False,
-                  video_interval=0, grid_size=[]
+                  video_interval=0, grid_size=[], system_prompt=None, temperature=None, max_tokens=None, top_p=None
                   ):
 
     if not model_name or not provider_id:
@@ -137,6 +141,10 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
             video_understanding=video_understanding,
             video_interval=video_interval,
             grid_size=grid_size,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
         )
 
     logger.info(f"任务进入执行队列 (task_id={task_id})")
@@ -210,7 +218,8 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
 
         background_tasks.add_task(run_note_task, task_id, data.video_url, data.platform, data.quality, data.link,
                                   data.screenshot, data.model_name, data.provider_id, data.format, data.style,
-                                  data.extras, data.video_understanding, data.video_interval, data.grid_size)
+                                  data.extras, data.video_understanding, data.video_interval, data.grid_size,
+                                  data.system_prompt, data.temperature, data.max_tokens, data.top_p)
         return R.success({"task_id": task_id})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

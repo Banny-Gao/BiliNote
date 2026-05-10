@@ -53,6 +53,10 @@ export interface Task {
     quality: string
     model_name: string
     provider_id: string
+    system_prompt?: string
+    temperature?: number
+    max_tokens?: number
+    top_p?: number
   }
 }
 

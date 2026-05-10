@@ -16,4 +16,8 @@ class GPTSource:
     _format: Optional[list] = None
     video_img_urls:  Optional[list] = None
     checkpoint_key: Optional[str] = None
+    system_prompt: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
 

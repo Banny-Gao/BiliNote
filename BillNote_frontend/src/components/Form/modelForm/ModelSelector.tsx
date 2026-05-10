@@ -19,7 +19,9 @@ export function ModelSelector({ providerId }: ModelSelectorProps) {
   const { models, loading, selectedModel, loadModels, setSelectedModel, addNewModel } =
     useModelStore()
   const [search, setSearch] = useState('')
+  const [manualModel, setManualModel] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [manualMode, setManualMode] = useState(false)
 
   const filteredModels = models.filter(model => {
     const keywords = search.trim().toLowerCase().split(/\s+/)
@@ -34,14 +36,16 @@ export function ModelSelector({ providerId }: ModelSelectorProps) {
   }, [providerId])
 
   const handleSubmit = async () => {
-    if (!selectedModel) {
-      toast.error('请选择一个模型')
+    const modelName = manualMode ? manualModel.trim() : selectedModel
+    if (!modelName) {
+      toast.error('请选择或输入模型名称')
       return
     }
     try {
       setSubmitting(true)
-      await addNewModel(providerId, selectedModel)
+      await addNewModel(providerId, modelName)
       toast.success('保存模型成功 🎉')
+      setManualModel('')
     } catch (error) {
       toast.error('保存失败')
     } finally {
@@ -61,30 +65,49 @@ export function ModelSelector({ providerId }: ModelSelectorProps) {
         >
           {loading ? '加载中...' : '刷新模型'}
         </Button>
+        {models.length === 0 && !loading && (
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => setManualMode(!manualMode)}
+          >
+            {manualMode ? '刷新试试' : '手动输入'}
+          </Button>
+        )}
       </div>
 
-      <Select value={selectedModel} onValueChange={setSelectedModel}>
-        <SelectTrigger className="w-[300px]">
-          <SelectValue placeholder="请选择模型" />
-        </SelectTrigger>
-        <SelectContent>
-          <div className="p-2">
-            <Input
-              placeholder="搜索模型..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="h-8"
-            />
-          </div>
-          {filteredModels.map((model, index) => (
-            <SelectItem key={`${model.id}-${index}`} value={model.id}>
-              {model.id}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {manualMode ? (
+        <Input
+          placeholder="输入模型名称，如 MiniMax-M2.5"
+          value={manualModel}
+          onChange={e => setManualModel(e.target.value)}
+          className="w-[300px]"
+        />
+      ) : (
+        <Select value={selectedModel} onValueChange={setSelectedModel}>
+          <SelectTrigger className="w-[300px]">
+            <SelectValue placeholder="请选择模型" />
+          </SelectTrigger>
+          <SelectContent>
+            <div className="p-2">
+              <Input
+                placeholder="搜索模型..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="h-8"
+              />
+            </div>
+            {filteredModels.map((model, index) => (
+              <SelectItem key={`${model.id}-${index}`} value={model.id}>
+                {model.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
-      <Button onClick={handleSubmit} disabled={submitting || !selectedModel}>
+      <Button onClick={handleSubmit} disabled={submitting || (manualMode ? !manualModel.trim() : !selectedModel)}>
         {submitting ? '保存中...' : '保存模型'}
       </Button>
     </div>

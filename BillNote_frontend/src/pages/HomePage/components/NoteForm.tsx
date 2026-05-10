@@ -12,7 +12,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
-import { Info, Loader2, Plus } from 'lucide-react'
+import { Info, Loader2, Plus, ChevronDown, ChevronRight, Settings2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert.tsx'
 import { generateNote } from '@/services/note.ts'
 import { uploadFile } from '@/services/upload.ts'
@@ -50,7 +50,7 @@ const formSchema = z
     link: z.boolean().optional(),
     model_name: z.string().nonempty('请选择模型'),
     format: z.array(z.string()).default([]),
-    style: z.string().nonempty('请选择笔记生成风格'),
+    style: z.string(),
     extras: z.string().optional(),
     video_understanding: z.boolean().optional(),
     video_interval: z.coerce.number().min(1).max(30).default(6).optional(),
@@ -58,6 +58,10 @@ const formSchema = z
       .tuple([z.coerce.number().min(1).max(10), z.coerce.number().min(1).max(10)])
       .default([2, 2])
       .optional(),
+    system_prompt: z.string().optional(),
+    temperature: z.coerce.number().min(0).max(1).optional(),
+    max_tokens: z.coerce.number().int().min(1).optional(),
+    top_p: z.coerce.number().min(0).max(1).optional(),
   })
   .superRefine(({ video_url, platform }, ctx) => {
     if (platform === 'local') {
@@ -83,6 +87,26 @@ const formSchema = z
   })
 
 export type NoteFormValues = z.infer<typeof formSchema>
+
+/* ---- 风格预设文案 ---- */
+const STYLE_PROMPTS: Record<string, string> = {
+  minimal: '**精简信息**: 仅记录最重要的内容，简洁明了。',
+  detailed: '**详细记录**: 包含完整的内容和每个部分的详细讨论。需要尽可能多的记录视频内容，最好详细的笔记。',
+  academic: '**学术风格**: 适合学术报告，正式且结构化。',
+  tutorial: '**教程笔记**: 尽可能详细的记录教程，特别是关键点和一些重要的结论步骤。',
+  xiaohongshu: `**小红书风格**: 使用吸引人的标题和网络化表达。
+
+### 写作技巧
+1. 使用惊叹号、省略号等标点符号增强表达力。
+2. 使用 emoji 表情符号增加文字活力。
+3. 采用具有挑战性和悬念的表述。
+4. 利用正面刺激和负面激励，诱发读者好奇心。
+5. 融入热点话题和实用工具。`,
+  life_journal: '**生活向**: 记录个人生活感悟，情感化表达。',
+  task_oriented: '**任务导向**: 强调任务、目标，适合工作和待办事项。',
+  business: '**商业风格**: 适合商业报告、会议纪要，正式且精准。',
+  meeting_minutes: '**会议纪要**: 适合商业报告、会议纪要，正式且精准。',
+}
 
 /* -------------------- 可复用子组件 -------------------- */
 const SectionHeader = ({ title, tip }: { title: string; tip?: string }) => (
@@ -131,6 +155,7 @@ const NoteForm = () => {
   const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   /* ---- 全局状态 ---- */
   const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
@@ -154,7 +179,11 @@ const NoteForm = () => {
   /* ---- 派生状态（只 watch 一次，提高性能） ---- */
   const platform = useWatch({ control: form.control, name: 'platform' }) as string
   const videoUnderstandingEnabled = useWatch({ control: form.control, name: 'video_understanding' })
+  const watchedModelName = useWatch({ control: form.control, name: 'model_name' }) as string
   const editing = currentTask && currentTask.id
+
+  const selectedModel = modelList.find(m => m.model_name === watchedModelName)
+  const modelSupportsVision = selectedModel?.vision_supported ?? true
 
   const goModelAdd = () => {
     navigate("/settings/model");
@@ -165,6 +194,11 @@ const NoteForm = () => {
 
     return
   }, [])
+  useEffect(() => {
+    if (!modelSupportsVision && videoUnderstandingEnabled) {
+      form.setValue('video_understanding', false)
+    }
+  }, [modelSupportsVision, videoUnderstandingEnabled, form])
   useEffect(() => {
     if (!currentTask) return
     const { formData } = currentTask
@@ -184,6 +218,10 @@ const NoteForm = () => {
       video_interval: formData.video_interval ?? 6,
       grid_size: formData.grid_size ?? [2, 2],
       format: formData.format ?? [],
+      system_prompt: formData.system_prompt ?? '',
+      temperature: formData.temperature ?? undefined,
+      max_tokens: formData.max_tokens ?? undefined,
+      top_p: formData.top_p ?? undefined,
     })
   }, [
     // 当下面任意一个变了，就重新 reset
@@ -430,7 +468,11 @@ const NoteForm = () => {
                   <SectionHeader title="笔记风格" tip="选择生成笔记的呈现风格" />
                   <Select
                     value={field.value}
-                    onValueChange={field.onChange}
+                    onValueChange={v => {
+                      field.onChange(v)
+                
+                      form.setValue('extras', STYLE_PROMPTS[v] || '')
+                    }}
                     defaultValue={field.value}
                   >
                     <FormControl>
@@ -463,6 +505,7 @@ const NoteForm = () => {
                     <FormLabel>启用</FormLabel>
                     <Checkbox
                       checked={videoUnderstandingEnabled}
+                      disabled={!modelSupportsVision}
                       onCheckedChange={v => form.setValue('video_understanding', v)}
                     />
                   </div>
@@ -552,6 +595,123 @@ const NoteForm = () => {
               </FormItem>
             )}
           />
+
+          {/* 高级参数 */}
+          <div className="border rounded-md">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium hover:bg-neutral-50"
+            >
+              <span className="flex items-center gap-2">
+                <Settings2 className="h-4 w-4" />
+                高级参数
+              </span>
+              {showAdvanced ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+            {showAdvanced && (
+              <div className="space-y-4 border-t px-4 py-4">
+                <FormField
+                  control={form.control}
+                  name="system_prompt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1">
+                        System Prompt（系统提示词）
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-3 w-3 cursor-pointer text-neutral-400 hover:text-neutral-600" />
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs max-w-[260px]">
+                              设定 AI 助手的角色和行为准则，位于 messages 数组的 system role
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </FormLabel>
+                      <Textarea
+                        placeholder="可选：设定 AI 的角色和行为准则..."
+                        className="min-h-[60px] text-xs"
+                        {...field}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-3 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="temperature"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          Temperature
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-3 w-3 cursor-pointer text-neutral-400 hover:text-neutral-600" />
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs max-w-[260px]">
+                                控制输出的随机性。值越低越确定，值越高越多样。范围 0-1，默认 0.7
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </FormLabel>
+                        <Input type="number" step="0.1" min="0" max="1" placeholder="0.7" {...field} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="max_tokens"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          Max Tokens
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-3 w-3 cursor-pointer text-neutral-400 hover:text-neutral-600" />
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs max-w-[260px]">
+                                限制模型生成的最大 token 数，达到后停止生成。不填则使用模型默认值
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </FormLabel>
+                        <Input type="number" step="1" min="1" placeholder="不限" {...field} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="top_p"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          Top P
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-3 w-3 cursor-pointer text-neutral-400 hover:text-neutral-600" />
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs max-w-[260px]">
+                                核采样参数，控制累积概率密度。0.1 仅考虑最高概率的词，1.0 考虑所有词
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </FormLabel>
+                        <Input type="number" step="0.05" min="0" max="1" placeholder="默认" {...field} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </form>
       </Form>
     </div>

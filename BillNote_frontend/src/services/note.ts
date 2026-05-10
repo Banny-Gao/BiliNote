@@ -14,6 +14,10 @@ export const generateNote = async (data: {
   video_understand?: boolean
   video_interval?: number
   grid_size: Array<number>
+  system_prompt?: string
+  temperature?: number
+  max_tokens?: number
+  top_p?: number
 }) => {
   try {
     console.log('generateNote', data)

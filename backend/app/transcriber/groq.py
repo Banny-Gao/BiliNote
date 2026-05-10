@@ -3,8 +3,7 @@ import os
 
 from app.decorators.timeit import timeit
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
-from app.services.provider import ProviderService
-from app.transcriber.base import Transcriber
+from app.transcriber.base import Transcriber, get_transcriber_api_key
 from openai import OpenAI
 import ffmpeg
 import tempfile
@@ -28,14 +27,10 @@ class GroqTranscriber(Transcriber, ABC):
             print(f"文件超过 {MAX_SIZE_MB}MB，开始压缩（当前 {round(file_size / (1024 * 1024), 2)}MB）...")
             file_path = compress_audio(file_path)
             print(f"压缩完成，临时路径：{file_path}")
-        provider = ProviderService.get_provider_by_id('groq')
-
-
-        if not provider:
-            raise Exception("Groq 供应商未配置,请配置以后使用。")
+        api_key = get_transcriber_api_key('groq')
         client = OpenAI(
-            api_key=provider.get('api_key'),
-            base_url=provider.get('base_url')
+            api_key=api_key,
+            base_url='https://api.groq.com/openai/v1'
         )
         filename = file_path
 

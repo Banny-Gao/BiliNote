@@ -1,6 +1,7 @@
 import json
 from typing import Optional
 
+from app.db.model_dao import get_model_by_provider_and_name as get_model_dao_by_provider_and_name
 from app.gpt.gpt_factory import GPTFactory
 from app.models.model_config import ModelConfig
 from app.services.provider import ProviderService
@@ -107,6 +108,7 @@ def chat(
         model_name=model_name,
         provider=provider["type"],
         name=provider["name"],
+        vision_supported=True,
     )
     gpt = GPTFactory.from_config(config)
 

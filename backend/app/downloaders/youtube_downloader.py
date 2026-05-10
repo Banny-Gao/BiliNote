@@ -39,6 +39,7 @@ class YoutubeDownloader(Downloader, ABC):
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_path,
+            'noproxy': True,
             'noplaylist': True,
             'quiet': False,
         }
@@ -86,6 +87,7 @@ class YoutubeDownloader(Downloader, ABC):
         ydl_opts = {
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
             'outtmpl': output_path,
+            'noproxy': True,
             'noplaylist': True,
             'quiet': False,
             'merge_output_format': 'mp4',  # 确保合并成 mp4

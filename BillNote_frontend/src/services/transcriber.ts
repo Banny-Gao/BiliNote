@@ -6,6 +6,7 @@ export interface TranscriberConfig {
   available_types: { value: string; label: string }[]
   whisper_model_sizes: string[]
   mlx_whisper_available: boolean
+  api_keys: Record<string, string>
 }
 
 export interface ModelStatus {
@@ -27,6 +28,7 @@ export const getTranscriberConfig = async (): Promise<TranscriberConfig> => {
 export const updateTranscriberConfig = async (data: {
   transcriber_type: string
   whisper_model_size?: string
+  api_keys?: Record<string, string>
 }) => {
   return await request.post('/transcriber_config', data)
 }

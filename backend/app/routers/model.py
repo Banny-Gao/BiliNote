@@ -8,6 +8,7 @@ modelService = ModelService()
 class CreateModelRequest(BaseModel):
     provider_id: str
     model_name: str
+    vision_supported: bool = True
 
 # 返回体：模型信息
 class ModelItem(BaseModel):
@@ -37,7 +38,7 @@ def model_list(provider_id):
 
 @router.post("/models")
 def create_model(data: CreateModelRequest):
-    success = ModelService.add_new_model(data.provider_id, data.model_name)
+    success = ModelService.add_new_model(data.provider_id, data.model_name, data.vision_supported)
     if not success:
         return R.error("模型添加失败")
     return R.success(msg="模型添加成功")

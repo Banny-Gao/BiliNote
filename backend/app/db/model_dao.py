@@ -12,6 +12,7 @@ def get_model_by_provider_and_name(provider_id: int, model_name: str):
                 "id": model.id,
                 "provider_id": model.provider_id,
                 "model_name": model.model_name,
+                "vision_supported": True if model.vision_supported is None else bool(model.vision_supported),
                 "created_at": model.created_at,
             }
         return None
@@ -19,10 +20,10 @@ def get_model_by_provider_and_name(provider_id: int, model_name: str):
         db.close()
 
 
-def insert_model(provider_id: int, model_name: str):
+def insert_model(provider_id: int, model_name: str, vision_supported: bool = True):
     db = next(get_db())
     try:
-        model = Model(provider_id=provider_id, model_name=model_name)
+        model = Model(provider_id=provider_id, model_name=model_name, vision_supported=int(vision_supported))
         db.add(model)
         db.commit()
         db.refresh(model)
@@ -30,6 +31,7 @@ def insert_model(provider_id: int, model_name: str):
             "id": model.id,
             "provider_id": model.provider_id,
             "model_name": model.model_name,
+            "vision_supported": True if model.vision_supported is None else bool(model.vision_supported),
             "created_at": model.created_at,
         }
     finally:
@@ -40,7 +42,7 @@ def get_models_by_provider(provider_id: int):
     db = next(get_db())
     try:
         models = db.query(Model).filter_by(provider_id=provider_id).all()
-        return [{"id": m.id, "model_name": m.model_name} for m in models]
+        return [{"id": m.id, "model_name": m.model_name, "vision_supported": True if m.vision_supported is None else bool(m.vision_supported)} for m in models]
     finally:
         db.close()
 
@@ -62,7 +64,7 @@ def get_all_models():
         # 只查询启用状态供应商的模型
         models = db.query(Model).join(Provider, Model.provider_id == Provider.id).filter(Provider.enabled == 1).all()
         return [
-            {"id": m.id, "provider_id": m.provider_id, "model_name": m.model_name}
+            {"id": m.id, "provider_id": m.provider_id, "model_name": m.model_name, "vision_supported": True if m.vision_supported is None else bool(m.vision_supported)}
             for m in models
         ]
     finally:

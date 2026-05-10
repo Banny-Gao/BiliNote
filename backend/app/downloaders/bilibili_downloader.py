@@ -60,6 +60,7 @@ class BilibiliDownloader(Downloader, ABC):
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'outtmpl': output_path,
             'http_headers': {'Referer': 'https://www.bilibili.com'},
+            'noproxy': True,
             'postprocessors': [
                 {
                     'key': 'FFmpegExtractAudio',
@@ -119,6 +120,7 @@ class BilibiliDownloader(Downloader, ABC):
             'format': 'bv*[ext=mp4]/bestvideo+bestaudio/best',
             'outtmpl': output_path,
             'http_headers': {'Referer': 'https://www.bilibili.com'},
+            'noproxy': True,
             'noplaylist': True,
             'quiet': False,
             'merge_output_format': 'mp4',  # 确保合并成 mp4
@@ -182,6 +184,7 @@ class BilibiliDownloader(Downloader, ABC):
             'subtitleslangs': langs,
             'subtitlesformat': 'srt/json3/best',  # 支持多种格式
             'skip_download': True,
+            'noproxy': True,
             'outtmpl': os.path.join(output_dir, f'{video_id}.%(ext)s'),
             'quiet': True,
         }
